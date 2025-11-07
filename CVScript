@@ -1,0 +1,103 @@
+import cv2
+import numpy as np
+import os
+import pyautogui
+import keyboard
+import time
+import serial
+
+ser = serial.Serial('COM5', 9600)
+
+original_filename = 'screenshot.png'
+cropped_filename = 'cropped_screenshot.png'
+cooldown_time = 3  # seconds
+
+last_action_time = time.time()
+
+def capture_screenshot():
+    global last_action_time
+
+    # Check if the cooldown period has passed
+    current_time = time.time()
+    if current_time - last_action_time < cooldown_time:
+        print(f"Cooldown in progress. Please wait for {int(cooldown_time - (current_time - last_action_time))} seconds.")
+        return
+
+    # Capture the screenshot using PyAutoGUI
+    screenshot = pyautogui.screenshot()
+    
+    # Delete the previous screenshots if they exist
+    for file in [original_filename, cropped_filename]:
+        if os.path.exists(file):
+            os.remove(file)
+
+    # Save the new screenshot
+    screenshot.save(original_filename)
+        
+    # Use pytesseract to perform OCR on the cropped screenshot
+    image = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+
+    # Crop the image (halve the width, decrease height from top and bottom)
+    height, width, _ = image.shape
+    cropped_image = image[int(0.3 * height):int(0.5 * height), int(0.2 * width):int(0.4 * width)]
+
+    # Save the cropped image
+    cv2.imwrite(cropped_filename, cropped_image)
+
+    color_read()
+    last_action_time = time.time()  # Update the last action time
+
+
+def on_key_event(keyboard_event):
+    if keyboard_event.name == 'down' and keyboard_event.event_type == keyboard.KEY_DOWN:
+        print("Capturing screenshot...")
+        capture_screenshot()
+
+    elif keyboard_event.name == 'left' and keyboard_event.event_type == keyboard.KEY_DOWN:
+        print("Capturing screenshot...")
+        capture_screenshot()
+
+    elif keyboard_event.name == 'right' and keyboard_event.event_type == keyboard.KEY_DOWN:
+        print("Capturing screenshot...")
+        capture_screenshot()
+
+    elif keyboard_event.name == 'up' and keyboard_event.event_type == keyboard.KEY_DOWN:
+        print("Capturing screenshot...")
+        capture_screenshot()
+
+
+# Register the callback function for the F1 key
+keyboard.hook(on_key_event)
+
+
+def color_read():
+    try:
+        image = cv2.imread(cropped_filename)
+
+        if image is None:
+            raise Exception("Failed to load image")
+
+        lower_red = np.array([0, 0, 102], dtype="uint8")
+        upper_red = np.array([0, 0, 181], dtype="uint8")
+
+        mask = cv2.inRange(image, lower_red, upper_red)
+        detected_output = cv2.bitwise_and(image, image, mask=mask)
+
+        # cv2.imshow("red color detection", detected_output)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+        # Count the number of non-zero pixels in the mask
+        red_pixel_count = np.count_nonzero(mask)
+
+        # Set a threshold for red detection
+        red_threshold = 10  # Adjust this threshold based on your needs
+
+        # Check if red is detected based on the threshold
+        if red_pixel_count > red_threshold:
+            ser.write(b'Tase')
+
+    except Exception as e:
+        print(f"Error in color_read: {e}")
+
+keyboard.wait('esc')
